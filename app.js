@@ -195,3 +195,7 @@ setInterval(async () => {
         console.log(chalk.bold.red(error.message));
     }
 }, 15000);
+
+
+// MONGO_URI=mongodb://127.0.0.1:27017
+// PORT=5000
