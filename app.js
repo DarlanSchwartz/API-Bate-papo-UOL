@@ -124,10 +124,10 @@ app.post('/status', async (req, res) => {
         if (userLoggedIn) {
             await db.collection('participants').updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
             return res.sendStatus(200);
-        } 
-            
+        }
+
         return res.sendStatus(404);
-        
+
     } catch (error) {
         return res.status(500).send(error.message);
     }
@@ -169,3 +169,29 @@ app.get('/messages', async (req, res) => {
     }
 });
 
+
+
+
+setInterval(async () => {
+    try {
+        const participants = await db.collection('participants').find({ lastStatus: { $lte: Date.now() - 10000 } }).toArray();
+
+        participants.forEach(async (participant) => {
+            
+            await db.collection('messages').insertOne({
+                from: participant.name,
+                to: 'Todos',
+                text: `sai da sala...`,
+                type: 'status',
+                time: dayjs().format('HH:mm:ss'),
+            });
+
+            db.collection('participants').deleteOne({
+                name: participant.name,
+            });
+        });
+
+    } catch (error) {
+        console.log(chalk.bold.red(error.message));
+    }
+}, 15000);
