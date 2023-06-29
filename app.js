@@ -117,8 +117,20 @@ app.post('/messages', async (req, res) => {
     }
 });
 
-app.post('/status', (req, res) => {
-
+app.post('/status', async (req, res) => {
+    const { user } = req.headers;
+    try {
+        const userLoggedIn = await db.collection('participants').findOne({ name: user });
+        if (userLoggedIn) {
+            await db.collection('participants').updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
+            return res.sendStatus(200);
+        } 
+            
+        return res.sendStatus(404);
+        
+    } catch (error) {
+        return res.status(500).send(error.message);
+    }
 });
 
 
@@ -138,7 +150,7 @@ app.get('/messages', async (req, res) => {
         const { user } = req.headers;
         if (limit) {
 
-            if(isNaN(limit) || (!isNaN(limit) && limit < 0))  return res.sendStatus(422);
+            if (isNaN(limit) || (!isNaN(limit) && limit < 0)) return res.sendStatus(422);
 
             const dbMessages = await db
                 .collection('messages')
