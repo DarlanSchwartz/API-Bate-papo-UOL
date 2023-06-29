@@ -15,20 +15,19 @@ const userSchema = joi.object({
 
 start();
 
-async function start()
-{
+async function start() {
     app.use(cors());
     app.use(json());
 
     app.listen(port, () => {
         console.log(chalk.bold.green(`--------------- Server running on port ${port}`));
     });
-    
+
     try {
         await mongoClient.connect();
         console.log(chalk.bold.blue('--------------- MongoDB Connected!'));
     } catch (err) {
-      console.log(chalk.bold.red(err.message));
+        console.log(chalk.bold.red(err.message));
     }
 }
 
@@ -37,10 +36,10 @@ const db = mongoClient.db();
 
 // ---------------- POST ---------------
 
-app.post('/participants', async (req,res)=>{
+app.post('/participants', async (req, res) => {
 
     // Validation of undefined
-    const {name} = req.body;
+    const { name } = req.body;
 
     const validation = userSchema.validate(req.body, { abortEarly: false });
 
@@ -50,21 +49,19 @@ app.post('/participants', async (req,res)=>{
     }
 
     // Validation of empty
-    if(name == '') return res.sendStatus(422);
+    if (name == '') return res.sendStatus(422);
 
     try {
         const hasUser = await db.collection('participants').findOne({ name });
-        if(hasUser)
-        {
+        if (hasUser) {
             return res.status(409).send('User already exists!');
         }
-        else
-        {
+        else {
             await db.collection('participants').insertOne({
                 name,
-                lastStatus:Date.now()
+                lastStatus: Date.now()
             });
-            
+
             await db.collection('messages').insertOne({
                 from: name,
                 to: 'Todos',
@@ -82,17 +79,51 @@ app.post('/participants', async (req,res)=>{
 
 });
 
-app.post('/messages',  (req,res)=>{
+app.post('/messages', async (req, res) => {
 
+    const { to, text, type } = req.body;
+    const { user } = req.headers;
+
+    if (user === '') return res.sendStatus(422);
+    try {
+        const userLoggedIn = await db.collection('participants').findOne({ name: user });
+
+        if (!userLoggedIn) {
+            console.log(chalk.bold.red(`NOT LOGGED IN -> ${user} tryed to sent a message to ${to} : ${text} - ${dayjs().format('HH:mm:ss')} --- Type: ${type}`));
+            return res.sendStatus(422);
+        }
+    } catch (error) {
+        return res.status(500).send(error.message);
+    }
+
+    if (!to || !text || !type) return res.sendStatus(422);
+
+    if (to === '' || text === '') return res.sendStatus(422);
+
+    if (type !== "private_message" && type !== "message") return res.sendStatus(422);
+
+    try {
+        await db.collection('messages').insertOne({
+            from: user,
+            to: to,
+            text: text,
+            type: type,
+            time: dayjs().format('HH:mm:ss'),
+        });
+        console.log(chalk.bgMagenta.red(`User ${user} has sent a message to ${to} : ${text} - ${dayjs().format('HH:mm:ss')} --- Type: ${type}`));
+        return res.sendStatus(201);
+    } catch (error) {
+        return res.status(500).send(error.message);
+    }
 });
 
-app.post('/status',  (req,res)=>{
+app.post('/status', (req, res) => {
 
 });
 
 
 // ---------------- GET ---------------
-app.get('/participants',  async (req,res)=>{
+app.get('/participants', async (req, res) => {
     try {
         const participants = await db.collection('participants').find().toArray();
         return res.status(200).send(participants);
@@ -101,7 +132,28 @@ app.get('/participants',  async (req,res)=>{
     }
 });
 
-app.get('/messages',  (req,res)=>{
-    
+app.get('/messages', async (req, res) => {
+    try {
+        const { limit } = req.query;
+        const { user } = req.headers;
+        if (limit) {
+
+            if(isNaN(limit) || (!isNaN(limit) && limit < 0))  return res.sendStatus(422);
+
+            const dbMessages = await db
+                .collection('messages')
+                .find({ $or: [{ to: 'Todos' }, { to: user }, { from: user }, { type: 'message' },], })
+                .toArray();
+            return res.send([...dbMessages].reverse().slice(0, limit).reverse());
+        } else {
+            const dbMessages = await db
+                .collection('messages')
+                .find({ $or: [{ to: 'Todos' }, { to: user }, { from: user }] })
+                .toArray();
+            return res.send([...dbMessages]);
+        }
+    } catch (error) {
+        return res.status(500).send(error.message);
+    }
 });
 
