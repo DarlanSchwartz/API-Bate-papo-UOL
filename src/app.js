@@ -1,4 +1,4 @@
-import { MongoClient } from 'mongodb';
+import { MongoClient,ObjectId } from 'mongodb';
 import express, { json } from 'express';
 import chalk from 'chalk';
 import cors from 'cors';
@@ -10,6 +10,12 @@ dotenv.config();
 
 const mongoClient = new MongoClient(process.env.DATABASE_URL);
 const app = express();
+
+const messageSchema = joi.object({
+    to: joi.string().required(),
+    text: joi.string().required(),
+    type: joi.string().valid('message', 'private_message').required(),
+});
 
 start();
 
@@ -40,8 +46,7 @@ app.post('/participants', async (req, res) => {
     // Validation of undefined
     let { name } = req.body;
 
-    if(name)
-    {
+    if (name) {
         name = stripHtml(name).result.trim();
     }
 
@@ -55,6 +60,8 @@ app.post('/participants', async (req, res) => {
         const errors = validation.error.details.map((detail) => detail.message);
         return res.status(422).send(errors);
     }
+
+    if(name === "") return res.status(422).send('Cannot login with empty name!');
 
     try {
         const hasUser = await db.collection('participants').findOne({ name });
@@ -93,7 +100,7 @@ app.post('/messages', async (req, res) => {
         return res.sendStatus(422);
     }
 
-    
+
     try {
         const userLoggedIn = await db.collection('participants').findOne({ name: user });
 
@@ -105,26 +112,19 @@ app.post('/messages', async (req, res) => {
         return res.status(500).send(error.message);
     }
 
-    const messageSchema = joi.object({
-        to:joi.string().required(),
-        text:joi.string().required(),
-        type:joi.string().required()
-    });
+    const validation = messageSchema.validate(req.body, { abortEarly: false });
 
-    const validation = messageSchema.validate(req.body,{abortEarly:false});
-
-    if(validation.error)
-    {
+    if (validation.error) {
         const errors = validation.error.details.map((detail) => detail.message);
         console.log(chalk.bold.red(`USER ${user} TRIED TO SENT MESSAGE WITHOUT or WITH SOME INVALID PARAMETERS`));
         return res.status(422).send(errors);
     }
 
-    if(type !== 'private_message' && type !== 'message')
-    {
-        console.log(chalk.bold.red(`USER ${user} TRIED TO SENT MESSAGE WITHOUT or WITH SOME INVALID PARAMETERS`));
-        return res.status(422).send('Invalid message type!');
-    }
+    // if(type !== 'private_message' && type !== 'message')
+    // {
+    //     console.log(chalk.bold.red(`USER ${user} TRIED TO SENT MESSAGE WITHOUT or WITH SOME INVALID PARAMETERS`));
+    //     return res.status(422).send('Invalid message type!');
+    // }
 
     try {
         await db.collection('messages').insertOne({
@@ -196,15 +196,44 @@ app.get('/messages', async (req, res) => {
     }
 });
 
+app.put('/messages/:id', async (req, res) => {
+    const { id } = req.params;
+    const { user } = req.headers;
 
 
+    const bodyVal = messageSchema.validate(req.body, {abortEarly: false});
+
+    const headerValidation = await db.collection('participants').findOne({ name: user });
+
+    if (bodyVal.hasOwnProperty('error') || !headerValidation) {
+        if (bodyVal.error) return res.status(422).send(bodyVal.error.details.map((detail) => detail.message));
+
+        return res.sendStatus(422);
+    } else {
+        try {
+            const message = await db.collection('messages').findOne({ _id: new ObjectId(id) });
+            if (message) {
+                if (message.from === user) {
+                    await db.collection('messages').updateOne({ _id: message._id }, { $set: req.body });
+                    return res.sendStatus(200);
+                }
+
+                return res.sendStatus(401);
+            }
+
+            return res.sendStatus(404);
+        } catch (error) {
+            return res.status(500).send(error.message);
+        }
+    }
+});
 
 setInterval(async () => {
     try {
         const participants = await db.collection('participants').find({ lastStatus: { $lte: Date.now() - 10000 } }).toArray();
 
         participants.forEach(async (participant) => {
-            
+
             await db.collection('messages').insertOne({
                 from: participant.name,
                 to: 'Todos',
