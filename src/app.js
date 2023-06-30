@@ -5,6 +5,7 @@ import cors from 'cors';
 import dayjs from 'dayjs';
 import joi from 'joi';
 import dotenv from 'dotenv';
+import { stripHtml } from 'string-strip-html';
 dotenv.config();
 
 const mongoClient = new MongoClient(process.env.DATABASE_URL);
@@ -37,7 +38,12 @@ const db = mongoClient.db();
 app.post('/participants', async (req, res) => {
 
     // Validation of undefined
-    const { name } = req.body;
+    let { name } = req.body;
+
+    if(name)
+    {
+        name = stripHtml(name).result.trim();
+    }
 
     const userSchema = joi.object({
         name: joi.string().required()
@@ -102,7 +108,7 @@ app.post('/messages', async (req, res) => {
     const messageSchema = joi.object({
         to:joi.string().required(),
         text:joi.string().required(),
-        type:joi.string().allow('private_message','message')
+        type:joi.string().required().allow('private_message','message')
     });
 
     const validation = messageSchema.validate(req.body,{abortEarly:false});
@@ -117,10 +123,10 @@ app.post('/messages', async (req, res) => {
     try {
         await db.collection('messages').insertOne({
             from: user,
-            to: to,
-            text: text,
-            type: type,
-            time: dayjs().format('HH:mm:ss'),
+            to: stripHtml(to).result.trim(),
+            text: stripHtml(text).result.trim(),
+            type: stripHtml(type).result.trim(),
+            time: dayjs().format('HH:mm:ss')
         });
         console.log(chalk.bold.red(`User ${user} has sent a message to ${to} : ${text} - ${dayjs().format('HH:mm:ss')} --- Type: ${type}`));
         return res.sendStatus(201);
@@ -163,7 +169,7 @@ app.get('/messages', async (req, res) => {
         const { user } = req.headers;
         if (limit) {
 
-            if (isNaN(limit) || (!isNaN(limit) && limit < 0)) return res.sendStatus(422);
+            if (isNaN(limit) || (!isNaN(limit) && limit <= 0)) return res.sendStatus(422);
 
             const dbMessages = await db
                 .collection('messages')
