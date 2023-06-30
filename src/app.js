@@ -47,7 +47,7 @@ app.post('/participants', async (req, res) => {
     let { name } = req.body;
 
     if (name) {
-        name = stripHtml(name).result.trim();
+        name = stripHtml(name.toString()).result.trim();
     }
 
     const userSchema = joi.object({
