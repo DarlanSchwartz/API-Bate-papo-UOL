@@ -46,6 +46,10 @@ app.post('/participants', async (req, res) => {
     // Validation of undefined
     let { name } = req.body;
 
+    if (name) {
+        name = stripHtml(name).result.trim();
+    }
+
     const userSchema = joi.object({
         name: joi.any().required()
     });
@@ -58,7 +62,7 @@ app.post('/participants', async (req, res) => {
     }
 
     if(name === "") return res.status(422).send('Cannot login with empty name!');
-    
+
     try {
         const hasUser = await db.collection('participants').findOne({ name });
         if (hasUser) {
@@ -72,7 +76,7 @@ app.post('/participants', async (req, res) => {
             });
 
             await db.collection('messages').insertOne({
-                from: stripHtml(name).result.trim(),
+                from: name,
                 to: 'Todos',
                 text: 'entra na sala...',
                 type: 'status',
@@ -221,6 +225,27 @@ app.put('/messages/:id', async (req, res) => {
         } catch (error) {
             return res.status(500).send(error.message);
         }
+    }
+});
+
+app.delete('/messages/:id', async (req, res) => {
+    const { id } = req.params;
+    const { user } = req.headers;
+
+    try {
+        const message = await db.collection('messages').findOne({ _id: new ObjectId(id) });
+        if (message) {
+            if (message.from === user) {
+                await db.collection('messages').deleteOne({ _id: message._id });
+                return res.sendStatus(200);
+            }
+
+            return res.sendStatus(401);
+        }
+
+        return res.sendStatus(404);
+    } catch (error) {
+        return res.status(500).send(error.message);
     }
 });
 
