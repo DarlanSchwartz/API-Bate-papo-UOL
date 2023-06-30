@@ -38,7 +38,6 @@ async function start() {
 
 const db = mongoClient.db();
 
-
 // ---------------- POST ---------------
 
 app.post('/participants', async (req, res) => {
@@ -95,8 +94,8 @@ app.post('/participants', async (req, res) => {
 app.post('/messages', async (req, res) => {
 
     const { to, text, type } = req.body;
-    const { user } = req.headers;
-
+    const user = Buffer.from(req.headers['user'], 'latin1').toString('utf-8');
+    
     if (user === '') {
         console.log(chalk.bold.red(`USER ${user} TRIED TO SENT MESSAGE WITHOUT A HEADER NAME`));
         return res.sendStatus(422);
@@ -144,7 +143,7 @@ app.post('/messages', async (req, res) => {
 });
 
 app.post('/status', async (req, res) => {
-    const { user } = req.headers;
+    const user = Buffer.from(req.headers['user'], 'latin1').toString('utf-8');
     try {
         const userLoggedIn = await db.collection('participants').findOne({ name: user });
         if (userLoggedIn) {
@@ -158,7 +157,6 @@ app.post('/status', async (req, res) => {
         return res.status(500).send(error.message);
     }
 });
-
 
 // ---------------- GET ---------------
 app.get('/participants', async (req, res) => {
@@ -174,7 +172,7 @@ app.get('/participants', async (req, res) => {
 app.get('/messages', async (req, res) => {
     try {
         const { limit } = req.query;
-        const { user } = req.headers;
+        const user = Buffer.from(req.headers['user'], 'latin1').toString('utf-8');
         if (limit) {
 
             if (isNaN(limit) || (!isNaN(limit) && limit <= 0)) return res.sendStatus(422);
@@ -200,8 +198,7 @@ app.get('/messages', async (req, res) => {
 
 app.put('/messages/:id', async (req, res) => {
     const { id } = req.params;
-    const { user } = req.headers;
-
+    const user = Buffer.from(req.headers['user'], 'latin1').toString('utf-8');
 
     const bodyVal = messageSchema.validate(req.body, {abortEarly: false});
 
