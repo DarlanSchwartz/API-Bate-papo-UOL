@@ -94,7 +94,7 @@ app.post('/participants', async (req, res) => {
 app.post('/messages', async (req, res) => {
 
     const { to, text, type } = req.body;
-    const user = req.headers.name == undefined ? '' : Buffer.from(req.headers['user'], 'latin1').toString('utf-8');
+    const user = req.headers.user == undefined ? '' : Buffer.from(req.headers['user'], 'latin1').toString('utf-8');
     
     if (user === '') {
         console.log(chalk.bold.red(`USER ${user} TRIED TO SENT MESSAGE WITHOUT A HEADER NAME`));
