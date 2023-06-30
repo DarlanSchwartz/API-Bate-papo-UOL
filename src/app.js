@@ -46,7 +46,7 @@ app.post('/participants', async (req, res) => {
     }
 
     const userSchema = joi.object({
-        name: joi.string().required()
+        name: joi.any().required()
     });
 
     const validation = userSchema.validate(req.body, { abortEarly: false });
@@ -108,7 +108,7 @@ app.post('/messages', async (req, res) => {
     const messageSchema = joi.object({
         to:joi.string().required(),
         text:joi.string().required(),
-        type:joi.string().required().allow('private_message','message')
+        type:joi.string().required()
     });
 
     const validation = messageSchema.validate(req.body,{abortEarly:false});
@@ -120,6 +120,12 @@ app.post('/messages', async (req, res) => {
         return res.status(422).send(errors);
     }
 
+    if(type !== 'private_message' && type !== 'message')
+    {
+        console.log(chalk.bold.red(`USER ${user} TRIED TO SENT MESSAGE WITHOUT or WITH SOME INVALID PARAMETERS`));
+        return res.status(422).send('Invalid message type!');
+    }
+
     try {
         await db.collection('messages').insertOne({
             from: user,
@@ -128,7 +134,7 @@ app.post('/messages', async (req, res) => {
             type: stripHtml(type).result.trim(),
             time: dayjs().format('HH:mm:ss')
         });
-        console.log(chalk.bold.red(`User ${user} has sent a message to ${to} : ${text} - ${dayjs().format('HH:mm:ss')} --- Type: ${type}`));
+        console.log(chalk.bgBlueBright.green(`User ${user} has sent a message to ${to} : ${text} - ${dayjs().format('HH:mm:ss')} --- Type: ${type}`));
         return res.sendStatus(201);
     } catch (error) {
         return res.status(500).send(error.message);
