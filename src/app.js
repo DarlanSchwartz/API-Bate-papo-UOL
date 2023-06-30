@@ -46,6 +46,8 @@ app.post('/participants', async (req, res) => {
     // Validation of undefined
     let { name } = req.body;
 
+    if(!isNaN(name))return res.sendStatus(422);
+
     if (name) {
         name = stripHtml(name.toString()).result.trim();
     }
