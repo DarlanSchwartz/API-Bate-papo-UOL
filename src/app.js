@@ -46,10 +46,6 @@ app.post('/participants', async (req, res) => {
     // Validation of undefined
     let { name } = req.body;
 
-    if (name) {
-        name = stripHtml(name).result.trim();
-    }
-
     const userSchema = joi.object({
         name: joi.any().required()
     });
@@ -62,7 +58,7 @@ app.post('/participants', async (req, res) => {
     }
 
     if(name === "") return res.status(422).send('Cannot login with empty name!');
-
+    
     try {
         const hasUser = await db.collection('participants').findOne({ name });
         if (hasUser) {
@@ -76,7 +72,7 @@ app.post('/participants', async (req, res) => {
             });
 
             await db.collection('messages').insertOne({
-                from: name,
+                from: stripHtml(name).result.trim(),
                 to: 'Todos',
                 text: 'entra na sala...',
                 type: 'status',
