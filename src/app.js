@@ -3,24 +3,22 @@ import express, { json } from 'express';
 import chalk from 'chalk';
 import cors from 'cors';
 import dayjs from 'dayjs';
-import joi from 'joi'
+import joi from 'joi';
+import dotenv from 'dotenv';
+dotenv.config();
 
-const mongoClient = new MongoClient('mongodb://127.0.0.1:27017/batePapoUol');
+const mongoClient = new MongoClient(process.env.DATABASE_URL);
 const app = express();
-const port = 5000;
-
-const userSchema = joi.object({
-    name: joi.string().required()
-});
 
 start();
 
 async function start() {
+
     app.use(cors());
     app.use(json());
 
-    app.listen(port, () => {
-        console.log(chalk.bold.green(`--------------- Server running on port ${port}`));
+    app.listen(process.env.PORT, () => {
+        console.log(chalk.bold.green(`--------------- Server running on port ${process.env.PORT}`));
     });
 
     try {
@@ -41,6 +39,10 @@ app.post('/participants', async (req, res) => {
     // Validation of undefined
     const { name } = req.body;
 
+    const userSchema = joi.object({
+        name: joi.string().required()
+    });
+
     const validation = userSchema.validate(req.body, { abortEarly: false });
 
     if (validation.error) {
@@ -48,12 +50,10 @@ app.post('/participants', async (req, res) => {
         return res.status(422).send(errors);
     }
 
-    // Validation of empty
-    if (name == '') return res.sendStatus(422);
-
     try {
         const hasUser = await db.collection('participants').findOne({ name });
         if (hasUser) {
+            console.log(chalk.bold.red(`USER ${name} TRIED TO LOGIN WHILE LOGGED IN`));
             return res.status(409).send('User already exists!');
         }
         else {
@@ -75,8 +75,6 @@ app.post('/participants', async (req, res) => {
     } catch (error) {
         return res.status(500).send(error.message);
     }
-
-
 });
 
 app.post('/messages', async (req, res) => {
@@ -84,23 +82,37 @@ app.post('/messages', async (req, res) => {
     const { to, text, type } = req.body;
     const { user } = req.headers;
 
-    if (user === '') return res.sendStatus(422);
+    if (user === '') {
+        console.log(chalk.bold.red(`USER ${user} TRIED TO SENT MESSAGE WITHOUT A HEADER NAME`));
+        return res.sendStatus(422);
+    }
+
+    
     try {
         const userLoggedIn = await db.collection('participants').findOne({ name: user });
 
         if (!userLoggedIn) {
-            console.log(chalk.bold.red(`NOT LOGGED IN -> ${user} tryed to sent a message to ${to} : ${text} - ${dayjs().format('HH:mm:ss')} --- Type: ${type}`));
+            console.log(chalk.bold.red(`NOT LOGGED IN -> ${user} tried to sent a message to ${to} : ${text} - ${dayjs().format('HH:mm:ss')} --- Type: ${type}`));
             return res.sendStatus(422);
         }
     } catch (error) {
         return res.status(500).send(error.message);
     }
 
-    if (!to || !text || !type) return res.sendStatus(422);
+    const messageSchema = joi.object({
+        to:joi.string().required(),
+        text:joi.string().required(),
+        type:joi.string().allow('private_message','message')
+    });
 
-    if (to === '' || text === '') return res.sendStatus(422);
+    const validation = messageSchema.validate(req.body,{abortEarly:false});
 
-    if (type !== "private_message" && type !== "message") return res.sendStatus(422);
+    if(validation.error)
+    {
+        const errors = validation.error.details.map((detail) => detail.message);
+        console.log(chalk.bold.red(`USER ${user} TRIED TO SENT MESSAGE WITHOUT or WITH SOME INVALID PARAMETERS`));
+        return res.status(422).send(errors);
+    }
 
     try {
         await db.collection('messages').insertOne({
@@ -110,7 +122,7 @@ app.post('/messages', async (req, res) => {
             type: type,
             time: dayjs().format('HH:mm:ss'),
         });
-        console.log(chalk.bgMagenta.red(`User ${user} has sent a message to ${to} : ${text} - ${dayjs().format('HH:mm:ss')} --- Type: ${type}`));
+        console.log(chalk.bold.red(`User ${user} has sent a message to ${to} : ${text} - ${dayjs().format('HH:mm:ss')} --- Type: ${type}`));
         return res.sendStatus(201);
     } catch (error) {
         return res.status(500).send(error.message);
@@ -138,6 +150,7 @@ app.post('/status', async (req, res) => {
 app.get('/participants', async (req, res) => {
     try {
         const participants = await db.collection('participants').find().toArray();
+        console.log(chalk.bold.green(`Requested all participants`));
         return res.status(200).send(participants);
     } catch (error) {
         return res.status(500).send(error.message);
@@ -156,8 +169,10 @@ app.get('/messages', async (req, res) => {
                 .collection('messages')
                 .find({ $or: [{ to: 'Todos' }, { to: user }, { from: user }, { type: 'message' },], })
                 .toArray();
+            console.log(chalk.bold.green(`User ${user} has requested ${limit} messages`));
             return res.send([...dbMessages].reverse().slice(0, limit).reverse());
         } else {
+            console.log(chalk.bold.green(`User ${user} has requested all messages`));
             const dbMessages = await db
                 .collection('messages')
                 .find({ $or: [{ to: 'Todos' }, { to: user }, { from: user }] })
@@ -196,6 +211,3 @@ setInterval(async () => {
     }
 }, 15000);
 
-
-// MONGO_URI=mongodb://127.0.0.1:27017
-// PORT=5000
